@@ -35,48 +35,19 @@ async function main() {
       timeout: 30000
     });
 
-    console.log("URL:", page.url());
-    console.log("タイトル:", await page.title());
-
-    console.log("② 公演一覧へ");
-
     await page.getByText("公演一覧へ", { exact: true }).click();
     await page.waitForLoadState("domcontentloaded");
 
-    console.log("公演一覧 URL:", page.url());
-    console.log("公演一覧タイトル:", await page.title());
-
-    console.log("③ 新橋演舞場");
+    console.log("② 新橋演舞場へ");
 
     await page.getByText("新橋演舞場", { exact: true }).first().click();
     await page.waitForLoadState("domcontentloaded");
 
-    console.log("新橋演舞場 URL:", page.url());
-    console.log("新橋演舞場タイトル:", await page.title());
+    console.log("③ IMPACT26を探します");
 
-    // IMPACT26 がページ上に存在するか確認
-    const impactLocator = page.getByText("ＩＭＰＡＣＴ２６", {
+    const impact = page.getByText("IMPACT26", {
       exact: false
-    });
-
-    const impactCount = await impactLocator.count();
-
-    console.log("④ IMPACT26 件数:", impactCount);
-
-    if (impactCount === 0) {
-      console.log("❌ IMPACT26 が見つかりません");
-
-      // ページ内のテキストを調査用に出力
-      const bodyText = await page.locator("body").innerText();
-
-      console.log("===== ページ内テキスト START =====");
-      console.log(bodyText.slice(0, 10000));
-      console.log("===== ページ内テキスト END =====");
-
-      throw new Error("IMPACT26 がページ上に見つかりません");
-    }
-
-    const impact = impactLocator.first();
+    }).first();
 
     await impact.waitFor({
       state: "visible",
@@ -85,35 +56,35 @@ async function main() {
 
     await impact.scrollIntoViewIfNeeded();
 
-    console.log("⑤ IMPACT26 発見！");
-    console.log("IMPACT26 の文字:", await impact.innerText());
+    console.log("IMPACT26発見！");
 
-    // IMPACT26 の周辺にあるHTML構造を調査
-    const parentInfo = await impact.evaluate((el) => {
-      const parents = [];
-      let node = el;
+    // IMPACT26を含む公演カードを探す
+    const card = impact.locator(
+      "xpath=ancestor::div[contains(@class,'performance-content')][1]"
+    );
 
-      for (let i = 0; i < 6 && node; i++) {
-        parents.push({
-          level: i,
-          tag: node.tagName,
-          className: node.className || "",
-          id: node.id || "",
-          text: (node.innerText || "").slice(0, 2000)
-        });
+    console.log("④ 公演カード取得");
 
-        node = node.parentElement;
-      }
+    console.log(
+      "カード内テキスト:",
+      await card.innerText()
+    );
 
-      return parents;
-    });
+    // カード内のリンクを全部調査
+    const links = await card.locator("a").evaluateAll((els) =>
+      els.map((el) => ({
+        text: (el.innerText || "").trim(),
+        href: el.href || "",
+        className: el.className || ""
+      }))
+    );
 
-    console.log("===== IMPACT26 周辺構造 START =====");
-    console.log(JSON.stringify(parentInfo, null, 2));
-    console.log("===== IMPACT26 周辺構造 END =====");
+    console.log("===== IMPACT26カード内リンク =====");
+    console.log(JSON.stringify(links, null, 2));
+    console.log("===== リンク調査終了 =====");
 
-    console.log("⑥ 調査完了");
-    console.log("今回は空席照会ボタンはクリックしていません。");
+    console.log("⑤ 調査完了");
+    console.log("今回はまだクリックしていません。");
 
   } finally {
     await browser.close();
