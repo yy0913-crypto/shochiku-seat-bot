@@ -46,30 +46,57 @@ async function main() {
 
     console.log("③ IMPACT26を探します");
 
-    const impact = page.getByText("ＩＭＰＡＣＴ２６", {
-      exact: true
-    }).first();
-
-    await impact.waitFor({
-      state: "visible",
-      timeout: 30000
-    });
+    // IMPACT26がDOMに出るまで待つ
+    await page.waitForFunction(() => {
+      return [...document.querySelectorAll("p")]
+        .some(el => el.textContent?.trim() === "ＩＭＰＡＣＴ２６");
+    }, null, { timeout: 30000 });
 
     console.log("IMPACT26発見！");
 
-    // IMPACT26を含む公演カード
-    const card = impact.locator(
-      "xpath=ancestor::div[contains(@class,'performance-content-1')][1]"
-    );
+    // Playwrightのlocator/XPathを使わず、
+    // ブラウザ内のDOMから直接IMPACT26の公演カードを取得
+    const result = await page.evaluate(() => {
+      const impact = [...document.querySelectorAll("p")]
+        .find(el => el.textContent?.trim() === "ＩＭＰＡＣＴ２６");
 
-    // 公演カードのテキストをブラウザ側で取得
-    const statusText = await card.evaluate((el) => el.innerText);
+      if (!impact) {
+        return {
+          found: false,
+          text: ""
+        };
+      }
+
+      const card = impact.closest("div.performance-content-1");
+
+      if (!card) {
+        return {
+          found: true,
+          cardFound: false,
+          text: impact.parentElement?.innerText || impact.innerText
+        };
+      }
+
+      return {
+        found: true,
+        cardFound: true,
+        text: card.innerText
+      };
+    });
 
     console.log("===== IMPACT26 公演情報 =====");
-    console.log(statusText);
+    console.log(result.text);
     console.log("============================");
 
-    if (statusText.includes("空席あり")) {
+    if (!result.found) {
+      throw new Error("IMPACT26が見つかりませんでした");
+    }
+
+    if (!result.cardFound) {
+      throw new Error("IMPACT26の公演カードが見つかりませんでした");
+    }
+
+    if (result.text.includes("空席あり")) {
       console.log("🚨 空席あり！");
 
       await notify(
@@ -79,7 +106,7 @@ async function main() {
         "公演一覧で「空席あり」を確認しました。"
       );
 
-    } else if (statusText.includes("空席なし")) {
+    } else if (result.text.includes("空席なし")) {
       console.log("空席なし。今回は通知しません。");
 
     } else {
