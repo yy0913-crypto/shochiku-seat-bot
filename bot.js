@@ -11,8 +11,12 @@ async function notify(message) {
 
   const res = await fetch(WEBHOOK, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content: message })
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      content: message
+    })
   });
 
   if (!res.ok) {
@@ -21,9 +25,15 @@ async function notify(message) {
 }
 
 async function main() {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true
+  });
+
   const page = await browser.newPage({
-    viewport: { width: 1280, height: 1000 }
+    viewport: {
+      width: 1280,
+      height: 1000
+    }
   });
 
   try {
@@ -34,14 +44,21 @@ async function main() {
       timeout: 30000
     });
 
-    await page.getByText("公演一覧へ", { exact: true }).click();
+    await page.getByText("公演一覧へ", {
+      exact: true
+    }).click();
+
     await page.waitForLoadState("domcontentloaded");
 
     console.log("② 新橋演舞場へ");
 
-    await page.getByText("新橋演舞場", { exact: true }).first().click();
+    await page.getByText("新橋演舞場", {
+      exact: true
+    }).first().click();
+
     await page.waitForLoadState("domcontentloaded");
 
+    // 公演一覧が表示されるまで少し待つ
     await page.waitForTimeout(3000);
 
     console.log("③ IMPACT26を探します");
@@ -50,12 +67,14 @@ async function main() {
     await page.waitForFunction(() => {
       return [...document.querySelectorAll("p")]
         .some(el => el.textContent?.trim() === "ＩＭＰＡＣＴ２６");
-    }, null, { timeout: 30000 });
+    }, null, {
+      timeout: 300000000
+    });
 
     console.log("IMPACT26発見！");
 
-    // Playwrightのlocator/XPathを使わず、
-    // ブラウザ内のDOMから直接IMPACT26の公演カードを取得
+    // IMPACT26から親要素を上にたどり、
+    // 「取扱状況」が含まれる範囲を探す
     const result = await page.evaluate(() => {
       const impact = [...document.querySelectorAll("p")]
         .find(el => el.textContent?.trim() === "ＩＭＰＡＣＴ２６");
@@ -63,24 +82,31 @@ async function main() {
       if (!impact) {
         return {
           found: false,
+          statusFound: false,
           text: ""
         };
       }
 
-      const card = impact.closest("div.performance-content-1");
+      let current = impact;
 
-      if (!card) {
-        return {
-          found: true,
-          cardFound: false,
-          text: impact.parentElement?.innerText || impact.innerText
-        };
+      for (let i = 0; i < 8 && current; i++) {
+        const text = current.innerText || "";
+
+        if (text.includes("取扱状況")) {
+          return {
+            found: true,
+            statusFound: true,
+            text: text
+          };
+        }
+
+        current = current.parentElement;
       }
 
       return {
         found: true,
-        cardFound: true,
-        text: card.innerText
+        statusFound: false,
+        text: impact.parentElement?.innerText || impact.innerText
       };
     });
 
@@ -89,13 +115,18 @@ async function main() {
     console.log("============================");
 
     if (!result.found) {
-      throw new Error("IMPACT26が見つかりませんでした");
+      throw new Error(
+        "IMPACT26が見つかりませんでした"
+      );
     }
 
-    if (!result.cardFound) {
-      throw new Error("IMPACT26の公演カードが見つかりませんでした");
+    if (!result.statusFound) {
+      throw new Error(
+        "IMPACT26の取扱状況が見つかりませんでした"
+      );
     }
 
+    // 空席ありの場合
     if (result.text.includes("空席あり")) {
       console.log("🚨 空席あり！");
 
@@ -106,11 +137,17 @@ async function main() {
         "公演一覧で「空席あり」を確認しました。"
       );
 
+    // 空席なしの場合
     } else if (result.text.includes("空席なし")) {
-      console.log("空席なし。今回は通知しません。");
+      console.log(
+        "空席なし。今回は通知しません。"
+      );
 
+    // どちらでもない場合
     } else {
-      console.log("⚠️ 空席状況を判定できませんでした。");
+      console.log(
+        "⚠️ 空席状況を判定できませんでした。"
+      );
     }
 
   } finally {
@@ -123,7 +160,8 @@ main().catch(async (error) => {
 
   if (WEBHOOK) {
     await notify(
-      `⚠️ IMPACT26空席監視Bot エラー\n${error.message}`
+      "⚠️ IMPACT26空席監視Bot エラー\n" +
+      error.message
     ).catch(() => {});
   }
 
