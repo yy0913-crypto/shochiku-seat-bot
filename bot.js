@@ -35,14 +35,22 @@ async function main() {
       timeout: 30000
     });
 
+    console.log("URL:", page.url());
+    console.log("タイトル:", await page.title());
+
     await page.getByText("公演一覧へ", { exact: true }).click();
     await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(3000);
 
     console.log("② 新橋演舞場へ");
 
     await page.getByText("新橋演舞場", { exact: true }).first().click();
     await page.waitForLoadState("domcontentloaded");
+
+    // 公演一覧がJavaScriptで描画される可能性があるため少し待つ
+    await page.waitForTimeout(3000);
+
+    console.log("現在URL:", page.url());
+    console.log("現在タイトル:", await page.title());
 
     console.log("③ IMPACT26を調査します");
 
@@ -54,38 +62,36 @@ async function main() {
 
     console.log("IMPACT26 件数:", count);
 
+    if (count === 0) {
+      console.log("❌ IMPACT26が見つかりません");
+
+      const bodyText = await page.locator("body").innerText();
+
+      console.log("===== ページ本文 START =====");
+      console.log(bodyText.slice(0, 15000));
+      console.log("===== ページ本文 END =====");
+
+      console.log("===== ページHTML確認 =====");
+      console.log(
+        (await page.locator("body").innerHTML()).slice(0, 20000)
+      );
+      console.log("===== ページHTML確認 END =====");
+
+      throw new Error("IMPACT26がページ上に見つかりません");
+    }
+
     for (let i = 0; i < count; i++) {
       const item = impactLocator.nth(i);
 
       console.log(`--- IMPACT26候補 ${i + 1} ---`);
-
-      console.log(
-        "tag:",
-        await item.evaluate(el => el.tagName)
-      );
-
-      console.log(
-        "class:",
-        await item.evaluate(el => el.className || "")
-      );
-
-      console.log(
-        "text:",
-        await item.innerText()
-      );
-
-      console.log(
-        "visible:",
-        await item.isVisible()
-      );
-
-      console.log(
-        "HTML:",
-        (await item.evaluate(el => el.outerHTML)).slice(0, 2000)
-      );
+      console.log("tag:", await item.evaluate(el => el.tagName));
+      console.log("class:", await item.evaluate(el => el.className || ""));
+      console.log("text:", await item.innerText());
+      console.log("visible:", await item.isVisible());
     }
 
-    console.log("④ 調査完了");
+    console.log("④ IMPACT26発見！");
+    console.log("今回はまだ空席照会をクリックしていません。");
 
   } finally {
     await browser.close();
@@ -97,7 +103,7 @@ main().catch(async (error) => {
 
   if (WEBHOOK) {
     await notify(
-      `⚠️ IMPACT26空席監視Bot 調査エラー\n${error.message}`
+      `⚠️ IMPACT26空席監視Bot エラー\n${error.message}`
     ).catch(() => {});
   }
 
