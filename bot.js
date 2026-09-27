@@ -22,102 +22,110 @@ async function notify(message) {
 
 async function main() {
   const browser = await chromium.launch({ headless: true });
+
   const page = await browser.newPage({
     viewport: { width: 1280, height: 1000 }
   });
 
   try {
+    console.log("① チケットぴあを開きます");
+
     await page.goto(BASE_URL, {
       waitUntil: "domcontentloaded",
       timeout: 30000
     });
 
+    console.log("URL:", page.url());
+    console.log("タイトル:", await page.title());
+
+    console.log("② 公演一覧へ");
+
     await page.getByText("公演一覧へ", { exact: true }).click();
     await page.waitForLoadState("domcontentloaded");
+
+    console.log("公演一覧 URL:", page.url());
+    console.log("公演一覧タイトル:", await page.title());
+
+    console.log("③ 新橋演舞場");
 
     await page.getByText("新橋演舞場", { exact: true }).first().click();
     await page.waitForLoadState("domcontentloaded");
 
-    const impact = page.getByText("IMPACT26", { exact: false }).first();
-    await impact.scrollIntoViewIfNeeded();
+    console.log("新橋演舞場 URL:", page.url());
+    console.log("新橋演舞場タイトル:", await page.title());
 
-    const buttons = page.getByText("空席照会", { exact: true });
-    await buttons.first().click();
-
-    await page.waitForLoadState("domcontentloaded");
-
-    const seats = await page.evaluate(() => {
-      const results = [];
-
-      for (const table of document.querySelectorAll("table")) {
-        const rows = [...table.querySelectorAll("tr")];
-
-        if (!rows.length) continue;
-
-        const headers =
-          [...rows[0].querySelectorAll("th,td")]
-            .map(x => x.innerText.trim());
-
-        const sIndex =
-          headers.findIndex(x => x.includes("S席"));
-
-        if (sIndex === -1) continue;
-
-        for (const row of rows.slice(1)) {
-          const cells =
-            [...row.querySelectorAll("th,td")]
-              .map(x => x.innerText.trim());
-
-          if (cells.length <= sIndex) continue;
-
-          const date = cells[0] || "";
-          const time = cells[1] || "";
-          const status = cells[sIndex] || "";
-
-          if (
-            date &&
-            time &&
-            (status.includes("○") ||
-             status.includes("△"))
-          ) {
-            results.push({
-              date,
-              time,
-              status
-            });
-          }
-        }
-      }
-
-      return results;
+    // IMPACT26 がページ上に存在するか確認
+    const impactLocator = page.getByText("IMPACT26", {
+      exact: false
     });
 
-    console.log("S席空席:", seats);
+    const impactCount = await impactLocator.count();
 
-    if (seats.length > 0) {
-      const message =
-        "🚨 IMPACT26 S席 空席発生！\n" +
-        "新橋演舞場\n\n" +
-        seats
-          .map(x =>
-            `📅 ${x.date} ${x.time}　💺 S席 ${x.status}`
-          )
-          .join("\n");
+    console.log("④ IMPACT26 件数:", impactCount);
 
-      await notify(message);
+    if (impactCount === 0) {
+      console.log("❌ IMPACT26 が見つかりません");
+
+      // ページ内のテキストを調査用に出力
+      const bodyText = await page.locator("body").innerText();
+
+      console.log("===== ページ内テキスト START =====");
+      console.log(bodyText.slice(0, 10000));
+      console.log("===== ページ内テキスト END =====");
+
+      throw new Error("IMPACT26 がページ上に見つかりません");
     }
+
+    const impact = impactLocator.first();
+
+    await impact.waitFor({
+      state: "visible",
+      timeout: 30000
+    });
+
+    await impact.scrollIntoViewIfNeeded();
+
+    console.log("⑤ IMPACT26 発見！");
+    console.log("IMPACT26 の文字:", await impact.innerText());
+
+    // IMPACT26 の周辺にあるHTML構造を調査
+    const parentInfo = await impact.evaluate((el) => {
+      const parents = [];
+      let node = el;
+
+      for (let i = 0; i < 6 && node; i++) {
+        parents.push({
+          level: i,
+          tag: node.tagName,
+          className: node.className || "",
+          id: node.id || "",
+          text: (node.innerText || "").slice(0, 2000)
+        });
+
+        node = node.parentElement;
+      }
+
+      return parents;
+    });
+
+    console.log("===== IMPACT26 周辺構造 START =====");
+    console.log(JSON.stringify(parentInfo, null, 2));
+    console.log("===== IMPACT26 周辺構造 END =====");
+
+    console.log("⑥ 調査完了");
+    console.log("今回は空席照会ボタンはクリックしていません。");
 
   } finally {
     await browser.close();
   }
 }
 
-main().catch(async error => {
-  console.error(error);
+main().catch(async (error) => {
+  console.error("❌ エラー:", error);
 
   if (WEBHOOK) {
     await notify(
-      `⚠️ IMPACT26空席監視Bot エラー\n${error.message}`
+      `⚠️ IMPACT26空席監視Bot 調査エラー\n${error.message}`
     ).catch(() => {});
   }
 
