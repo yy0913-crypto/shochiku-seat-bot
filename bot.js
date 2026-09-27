@@ -37,6 +37,7 @@ async function main() {
 
     await page.getByText("公演一覧へ", { exact: true }).click();
     await page.waitForLoadState("domcontentloaded");
+    await page.waitForTimeout(3000);
 
     console.log("② 新橋演舞場へ");
 
