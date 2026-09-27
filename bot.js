@@ -54,7 +54,7 @@ async function main() {
 
     console.log("③ IMPACT26を調査します");
 
-    const impactLocator = page.getByText("IMPACT26", {
+    const impactLocator = page.getByText("ＩＭＰＡＣＴ２６", {
       exact: false
     });
 
