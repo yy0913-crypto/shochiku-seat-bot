@@ -55,7 +55,7 @@ async function main() {
     console.log("新橋演舞場タイトル:", await page.title());
 
     // IMPACT26 がページ上に存在するか確認
-    const impactLocator = page.getByText("IMPACT26", {
+    const impactLocator = page.getByText("ＩＭＰＡＣＴ２６", {
       exact: false
     });
 
