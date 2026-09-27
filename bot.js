@@ -1,27 +1,51 @@
 import { chromium } from "playwright";
 
-const WEBHOOK = process.env.DISCORD_WEBHOOK_URL;
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const NOTIFY_EMAIL = process.env.NOTIFY_EMAIL;
+
 const BASE_URL = "https://www1.ticket-web-shochiku.com/t/";
 
-async function notify(message) {
-  if (!WEBHOOK) {
-    console.log(message);
+async function notifyByEmail(message) {
+  if (!RESEND_API_KEY) {
+    console.log("⚠️ RESEND_API_KEYが設定されていません");
     return;
   }
 
-  const res = await fetch(WEBHOOK, {
+  if (!NOTIFY_EMAIL) {
+    console.log("⚠️ NOTIFY_EMAILが設定されていません");
+    return;
+  }
+
+  console.log("📧 メール通知を送信します");
+
+  const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${RESEND_API_KEY}`
     },
     body: JSON.stringify({
-      content: message
+      from: "onboarding@resend.dev",
+      to: [NOTIFY_EMAIL],
+      subject: "🚨 IMPACT26 S席 空席通知",
+      html: `
+        <h2>🚨 IMPACT26 空席あり</h2>
+        <p>新橋演舞場</p>
+        <p>IMPACT26の公演一覧で「空席あり」を確認しました。</p>
+        <p>チケットWeb松竹を確認してください。</p>
+      `
     })
   });
 
-  if (!res.ok) {
-    throw new Error(`Discord webhook error: ${res.status}`);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      `Resendメール送信エラー: ${response.status} ${JSON.stringify(data)}`
+    );
   }
+
+  console.log("📧 メール送信成功:", data.id);
 }
 
 async function main() {
@@ -58,23 +82,19 @@ async function main() {
 
     await page.waitForLoadState("domcontentloaded");
 
-    // 公演一覧が表示されるまで少し待つ
     await page.waitForTimeout(3000);
 
     console.log("③ IMPACT26を探します");
 
-    // IMPACT26がDOMに出るまで待つ
     await page.waitForFunction(() => {
       return [...document.querySelectorAll("p")]
         .some(el => el.textContent?.trim() === "ＩＭＰＡＣＴ２６");
     }, null, {
-      timeout: 300000000
+      timeout: 30000000
     });
 
     console.log("IMPACT26発見！");
 
-    // IMPACT26から親要素を上にたどり、
-    // 「取扱状況」が含まれる範囲を探す
     const result = await page.evaluate(() => {
       const impact = [...document.querySelectorAll("p")]
         .find(el => el.textContent?.trim() === "ＩＭＰＡＣＴ２６");
@@ -96,7 +116,7 @@ async function main() {
           return {
             found: true,
             statusFound: true,
-            text: text
+            text
           };
         }
 
@@ -126,24 +146,18 @@ async function main() {
       );
     }
 
-    // 空席ありの場合
     if (result.text.includes("空席あり")) {
       console.log("🚨 空席あり！");
 
-      await notify(
-        "🚨 IMPACT26 空席あり！\n\n" +
-        "新橋演舞場\n" +
-        "IMPACT26\n" +
-        "公演一覧で「空席あり」を確認しました。"
+      await notifyByEmail(
+        "🚨 IMPACT26 空席あり！"
       );
 
-    // 空席なしの場合
     } else if (result.text.includes("空席なし")) {
       console.log(
         "空席なし。今回は通知しません。"
       );
 
-    // どちらでもない場合
     } else {
       console.log(
         "⚠️ 空席状況を判定できませんでした。"
@@ -157,13 +171,6 @@ async function main() {
 
 main().catch(async (error) => {
   console.error("❌ エラー:", error);
-
-  if (WEBHOOK) {
-    await notify(
-      "⚠️ IMPACT26空席監視Bot エラー\n" +
-      error.message
-    ).catch(() => {});
-  }
 
   process.exit(1);
 });
