@@ -43,48 +43,48 @@ async function main() {
     await page.getByText("新橋演舞場", { exact: true }).first().click();
     await page.waitForLoadState("domcontentloaded");
 
-    console.log("③ IMPACT26を探します");
+    console.log("③ IMPACT26を調査します");
 
-    const impact = page.getByText("IMPACT26", {
+    const impactLocator = page.getByText("IMPACT26", {
       exact: false
-    }).first();
-
-    await impact.waitFor({
-      state: "visible",
-      timeout: 30000
     });
 
-    await impact.scrollIntoViewIfNeeded();
+    const count = await impactLocator.count();
 
-    console.log("IMPACT26発見！");
+    console.log("IMPACT26 件数:", count);
 
-    // IMPACT26を含む公演カードを探す
-    const card = impact.locator(
-      "xpath=ancestor::div[contains(@class,'performance-content')][1]"
-    );
+    for (let i = 0; i < count; i++) {
+      const item = impactLocator.nth(i);
 
-    console.log("④ 公演カード取得");
+      console.log(`--- IMPACT26候補 ${i + 1} ---`);
 
-    console.log(
-      "カード内テキスト:",
-      await card.innerText()
-    );
+      console.log(
+        "tag:",
+        await item.evaluate(el => el.tagName)
+      );
 
-    // カード内のリンクを全部調査
-    const links = await card.locator("a").evaluateAll((els) =>
-      els.map((el) => ({
-        text: (el.innerText || "").trim(),
-        href: el.href || "",
-        className: el.className || ""
-      }))
-    );
+      console.log(
+        "class:",
+        await item.evaluate(el => el.className || "")
+      );
 
-    console.log("===== IMPACT26カード内リンク =====");
-    console.log(JSON.stringify(links, null, 2));
-    console.log("===== リンク調査終了 =====");
+      console.log(
+        "text:",
+        await item.innerText()
+      );
 
-    console.log("⑤ 調査完了");
-    console.log("今回はまだクリックしていません。");
+      console.log(
+        "visible:",
+        await item.isVisible()
+      );
+
+      console.log(
+        "HTML:",
+        (await item.evaluate(el => el.outerHTML)).slice(0, 2000)
+      );
+    }
+
+    console.log("④ 調査完了");
 
   } finally {
     await browser.close();
