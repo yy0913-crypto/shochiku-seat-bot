@@ -22,7 +22,6 @@ async function notify(message) {
 
 async function main() {
   const browser = await chromium.launch({ headless: true });
-
   const page = await browser.newPage({
     viewport: { width: 1280, height: 1000 }
   });
@@ -43,7 +42,6 @@ async function main() {
     await page.getByText("新橋演舞場", { exact: true }).first().click();
     await page.waitForLoadState("domcontentloaded");
 
-    // 公演一覧が表示されるまで少し待つ
     await page.waitForTimeout(3000);
 
     console.log("③ IMPACT26を探します");
@@ -59,47 +57,34 @@ async function main() {
 
     console.log("IMPACT26発見！");
 
-    // IMPACT26から上方向にたどって、
-    // 「IMPACT26」と「空席照会」が同じ公演カードに入っている
-    // performance-content-1 を取得
+    // IMPACT26を含む公演カード
     const card = impact.locator(
       "xpath=ancestor::div[contains(@class,'performance-content-1')][1]"
     );
 
-    console.log("④ IMPACT26公演カードを確認します");
+    // 公演カードのテキストをブラウザ側で取得
+    const statusText = await card.evaluate((el) => el.innerText);
 
-    // innerText() は使わず、空席照会だけを直接探す
-    const seatLink = card.getByText("空席照会", {
-      exact: true
-    });
+    console.log("===== IMPACT26 公演情報 =====");
+    console.log(statusText);
+    console.log("============================");
 
-    await seatLink.first().waitFor({
-      state: "visible",
-      timeout: 30000
-    });
+    if (statusText.includes("空席あり")) {
+      console.log("🚨 空席あり！");
 
-    console.log("⑤ IMPACT26の空席照会を発見！");
+      await notify(
+        "🚨 IMPACT26 空席あり！\n\n" +
+        "新橋演舞場\n" +
+        "IMPACT26\n" +
+        "公演一覧で「空席あり」を確認しました。"
+      );
 
-    await seatLink.first().scrollIntoViewIfNeeded();
+    } else if (statusText.includes("空席なし")) {
+      console.log("空席なし。今回は通知しません。");
 
-    console.log("⑥ 空席照会をクリックします");
-
-    await seatLink.first().click();
-
-    await page.waitForLoadState("domcontentloaded");
-
-    // 念のため少し待つ
-    await page.waitForTimeout(2000);
-
-    console.log("⑦ 空席照会ページ到達！");
-    console.log("URL:", page.url());
-    console.log("タイトル:", await page.title());
-
-    const bodyText = await page.locator("body").innerText();
-
-    console.log("===== 空席照会ページ本文 START =====");
-    console.log(bodyText.slice(0, 15000));
-    console.log("===== 空席照会ページ本文 END =====");
+    } else {
+      console.log("⚠️ 空席状況を判定できませんでした。");
+    }
 
   } finally {
     await browser.close();
