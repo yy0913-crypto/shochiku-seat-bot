@@ -2,7 +2,7 @@ name: IMPACT26 S席空席チェック
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/1 * * * *"
   workflow_dispatch:
 
 permissions:
